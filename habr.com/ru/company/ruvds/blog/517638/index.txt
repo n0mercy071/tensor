@@ -1,0 +1,228 @@
+SHODAN — ТЕМНЫЙ БЛИЗНЕЦ GOOGLE 
+
+Источник[https://ics-radar.shodan.io/] 
+
+"S in IoT stands for Security" 
+
+Про Shodan уже не раз писали, в том числе и здесь. Я хочу предложить еще раз 
+пробежаться по возможностям этого замечательного инструмента и принципам его 
+работы. Сразу хочу оговориться, ситуация с этим поисковиком вполне 
+классическая для исследователей в области информационной безопасности — 
+инструмент может использоваться как с благими намерениями, так и сильно за 
+чертой закона. 
+
+Disclamer: 
+
+Использование самого поисковика не является чем-то наказуемым. Успешный вход в 
+незакрытую панель управления узла нефтяного терминала где-то в Сингапуре и 
+эксперименты с открыванием заслонок — уже наказуемы. Могут прийти и 
+постучаться недружелюбные люди. Поэтому будьте благоразумны и уважайте чужое 
+пространство. Мы против применения Shodan для чего-то кроме исследовательских 
+целей или анализа собственных систем. 
+
+Предлагаю еще раз пройтись по возможностям этого поисковика, особенностям его 
+синтаксиса и попробовать найти что-то интересное. И давайте не будет печатать 
+«Войну и Мир» на чужих сетевых принтерах. 
+
+ЛЮДИ БЕСПЕЧНЫ 
+
+Каналы стали гигабитными, появились инструменты вроде ZMap, позволяющие 
+просканировать весь массив IPv4 адресов за несколько минут. И все равно до сих 
+пор немало людей, которые искренне уверены, что если никому не говорить о 
+поднятом сервисе, то можно не заморачиваться с его защитой. 
+
+К сожалению, очень быстро к вам придут вначале автоматические боты, а потом и 
+живые люди, если нащупается что-то интересное. Я так в свое время забыл 
+выключить vsftpd, который поднимал ненадолго. В итоге, через месяц я с 
+удивлением заметил, что внутри регулярно появляются и исчезают текстовые файлы 
+со спамом, какие-то небольшие зашифрованные архивы и тому подобные радости. 
+
+Если бы проблема исчерпывалась джуниор-админами и обычными людьми, которым 
+простительна некоторая беспечность и неквалифицированность, то оправдать 
+компании, которые намеренно встраивают бэкдоры в свои железные продукты я 
+просто не могу. Классические примеры — популярные IP-камеры 
+Hikvision[https://ipvm.com/reports/hik-backdoor] и 
+Dahua[https://ipvm.com/reports/dahua-backdoor]. Аналогичные истории были и с 
+роутерами D-link, Huawei и прочих производителей. 
+
+А уж с приходом Internet-of-Things, с его «безопасными» подходами к реализации 
+все становится совсем грустно. Тут тебе умные лампочки без паролей, работающие 
+со внешним интернетом по HTTP. Или вообще роботы-пылесосы, которые будут 
+использованы для атаки на вашу внутреннюю инфраструктуру, как это случилось с 
+Dongguan 
+Diqee[https://threatpost.com/iot-robot-vacuum-vulnerabilities-let-hackers-spy-on
+-victims/134179/].
+Там вообще весело — уязвимости CVE-2018-10987 и CVE-2018-10988 позволяли 
+получить root-права, перехватить управление устройством, подъехать в нужную 
+точку и получить изображение с инфракрасной камеры устройства. 
+
+Аналогичная история была с LG 
+Hom-Bot[https://betanews.com/2017/10/26/lg-hom-bot-homehack-vulnerability/], 
+где злоумышленник мог перехватить управление и использовать невинный пылесос, 
+как точку для вторжения в чужую сеть. 
+
+КАК РАБОТАЕТ SHODAN 
+
+Все сильно изменилось, когда появился Shodan. Ну ладно, на самом деле все 
+осталось таким же дырявым, но хотя бы появилась возможность оценить масштабы 
+конкретного бедствия и попытаться достучаться до вендора для закрытия 
+уязвимости. Shodan, по сути, это некий гибрид nmap -sV по всему диапазону IPv4 
+и поисковика результатов. Краулеры скрупулезно сканируют весь Интернет, 
+пробуют подключиться к открытым портами и по fingerprint определяют сервис, 
+который находится за этими портами. 
+
+Пример результата поиска по «vuln:cve-2014-0160». 
+
+В сочетании с поиском это дает возможность быстро оценить число уязвимых 
+версий ПО после публикации очередной уязвимости. 
+
+Данные по каждой записи хранятся в структуре, которую разработчики называют 
+banner. Вот как он выглядит: 
+
+{ "data": "Moxa Nport Device Status: Authentication disabled Name: 
+NP5232I_4728 MAC: 00:90:e8:47:10:2d", "ip_str": "46.252.132.235", "port": 
+4800, "org": "Starhub Mobile", "location": { "country_code": "SG" } } 
+
+В зависимости от количества полученной информации, banner может содержать 
+гораздо больше полей, по которым можно производить фильтрацию и поиск. По 
+умолчанию, поиск идет только по полю data, что отчасти связано с соображениями 
+безопасности. Поле data будет сильно отличаться в разных banner, в зависимости 
+от типа приложения, сервера или устройства. 
+
+HTTP/1.1 200 OK Server: nginx/1.1.19 Date: Sat, 03 Oct 2015 06:09:24 GMT 
+Content-Type: text/html; charset=utf-8 Content-Length: 6466 Connection: 
+keep-alive 
+
+Вот так будет выглядеть типичное поле data для HTTP-сервера. Можно увидеть 
+основные параметры и версию. 
+
+Copyright: Original Siemens Equipment PLC name: S7_Turbine Module type: CPU 
+313C Unknown (129): Boot Loader A Module: 6ES7 313-5BG04-0AB0 v.0.3 Basic 
+Firmware: v.3.3.8 Module name: CPU 313C Serial number of module: S 
+Q-D9U083642013 Plant identification: Basic Hardware: 6ES7 313-5BG04-0AB0 v.0.3 
+
+А вот так выглядит куда более необычный промышленный контроллер Siemens S7. 
+Вот на этом этапе уже становится немного страшновато от того, какие устройства 
+могут торчать в интернет и попадать в результаты поиска. С другой стороны, 
+security through obscurity еще никому не помогало. 
+
+Типовой сценарий использования предполагает, что вы даете общий запрос к полю 
+data, после чего уточняете свой поиск многочисленными фильтрами. Формат 
+выглядит запроса выглядит примерно так: 
+
+nuclear reactor filtername1:value filtername2:value filtername3:value 
+
+Обратите внимание, что после двоеточия пробел отсутствует. При этом вначале 
+будет произведена выборка всех записей, содержащих «nuclear reactor» в общем 
+поле data, а затем последовательно применены все перечисленные фильтры для 
+сужения объектов поиска. 
+
+Полный список фильтров доступен тут[https://beta.shodan.io/search/filters]. 
+При этом, некоторая часть доступна только для платных аккаунтов, например 
+«tag» и «vuln». 
+
+ПРОБУЕМ ИСКАТЬ 
+
+Давайте попробуем что-то вроде door controller. 
+
+Чудно. Теперь посмотрим на все HID VertX контроллеры, принадлежащие Spectrum 
+Business. 
+
+door controller org:"Spectrum Business" 
+
+После чего по клику на конкретный хост разворачивается краткая справка о 
+собранных по нему данных. Или можно посмотреть полный вывод сырых данных. 
+
+Raw data по 70.62.170.218 
+
+Property Name Value area_code null asn AS10796 city Garfield Heights 
+country_code US country_code3 null country_name United States 
+data.0._shodan.crawler 4aca62e44af31a464bdc72210b84546d570e9365 
+data.0._shodan.id e85c3c1b-54ff-4194-8dc1-311da6851e5d data.0._shodan.module 
+http data.0._shodan.options.referrer 5ee031c4-75c3-423f-99b8-5c06dd97cf14 
+data.0._shodan.ptr True data.0.data data.0.domains ['rr.com'] data.0.hash 0 
+data.0.hostnames ['rrcs-70-62-170-218.central.biz.rr.com'] data.0.http.host 
+70.62.170.218 data.0.http.html null data.0.http.html_hash null 
+data.0.http.location / data.0.http.redirects [] data.0.http.robots null 
+data.0.http.robots_hash null data.0.http.securitytxt null 
+data.0.http.securitytxt_hash null data.0.http.server null data.0.http.sitemap 
+null data.0.http.sitemap_hash null data.0.http.title null data.0.port 443 
+data.0.timestamp 2020-09-02T15:26:31.443605 data.0.transport tcp 
+data.1._shodan.crawler 4aca62e44af31a464bdc72210b84546d570e9365 
+data.1._shodan.id 458e8be2-04df-4db7-8499-8e378792584e data.1._shodan.module 
+http data.1._shodan.ptr True data.1.data HTTP/1.1 301 Moved Permanently 
+Location: https://70.62.170.218:443/ Content-Length: 0 Date: Wed, 02 Sep 2020 
+15:26:23 GMT Server: HID-Web data.1.domains ['rr.com'] data.1.hash -788227878 
+data.1.hostnames ['rrcs-70-62-170-218.central.biz.rr.com'] data.1.http.host 
+70.62.170.218 data.1.http.html data.1.http.html_hash 0 data.1.http.location / 
+data.1.http.redirects [] data.1.http.robots null data.1.http.robots_hash null 
+data.1.http.securitytxt null data.1.http.securitytxt_hash null 
+data.1.http.server HID-Web data.1.http.sitemap null data.1.http.sitemap_hash 
+null data.1.http.title null data.1.port 80 data.1.timestamp 
+2020-09-02T15:26:24.253885 data.1.transport tcp data.2._shodan.crawler 
+70752434fdf0dcec35df6ae02b9703eaae035f7d data.2._shodan.id 
+b7f280e3-cffc-4ddd-aa4b-1f9cd9e4d2be data.2._shodan.module vertx-edge 
+data.2._shodan.ptr True data.2.data HID VertX/ Edge door controller MAC: 
+00:06:8E:41:AB:81 Name: EdgeEHS400 Internal IP: 70.62.170.218 Type: EHS400 
+Firmware Version: 2.1.1.101 Firmware Date: 2018-05-03-11 data.2.domains [] 
+data.2.hash -764264635 data.2.hostnames [] data.2.opts.raw 
+646973636f76657265643b3039313b30303a30363a38453a34313a41423a38313b45646765454853
+3430303b37302e36322e3137302e3231383b313b4548533430303b322e312e312e3130313b323031
+382d30352d30332d31313b
+data.2.port 4070 data.2.tags ['ics'] data.2.timestamp 
+2020-08-26T20:59:09.260224 data.2.transport udp data.2.vertx.firmware_data 
+2018-05-03-11 data.2.vertx.firmware_version 2.1.1.101 data.2.vertx.internal_ip 
+70.62.170.218 data.2.vertx.mac 00:06:8E:41:AB:81 data.2.vertx.name EdgeEHS400 
+data.2.vertx.type EHS400 data.3._shodan.crawler 
+4aca62e44af31a464bdc72210b84546d570e9365 data.3._shodan.id 
+43663d5e-db76-4cba-8f14-6c1bf417ddd3 data.3._shodan.module ntp 
+data.3._shodan.ptr True data.3.data NTP protocolversion: 3 stratum: 3 leap: 0 
+precision: -17 rootdelay: 0.108978271484 rootdisp: 0.162017822266 refid: 
+1209934681 reftime: 3807379353.45 poll: 3 data.3.domains ['rr.com'] 
+data.3.hash -1317347992 data.3.hostnames 
+['rrcs-70-62-170-218.central.biz.rr.com'] data.3.opts.raw 
+1c0303ef00001be60000297a481e2359e2efff9972f64603e2f0016cc6b1f800e2f0016ceef1bb83
+e2f0016cef0fb34d
+data.3.port 123 data.3.timestamp 2020-08-25T21:30:20.877776 data.3.transport 
+udp dma_code 510 domains ['rr.com'] hostnames 
+['rrcs-70-62-170-218.central.biz.rr.com'] ip 1178512090 ip_str 70.62.170.218 
+isp Spectrum Business last_update 2020-09-02T15:26:31.443605 latitude 41.4344 
+longitude -81.6373 org Spectrum Business os null ports [80, 123, 443, 4070] 
+postal_code null region_code OH tags ['ics'] 
+
+ЧТО ЕЩЕ ИНТЕРЕСНОГО МОЖНО НАЙТИ 
+
+На самом деле, чего только уже не находили. И управление турбинами ГЭС, и 
+контроллер управления системами охлаждения муниципального ледового катка. Вот 
+несколько интересных и относительно безобидных вариантов. 
+
+"Server: Prismview Player" 
+
+Показывает уличные рекламные панели. И вечно датчики температуры демонстрируют 
+абсолютный ноль. 
+
+http.title:"Tesla PowerPack System" http.component:"d3" -ga3ca4f2 
+
+Показывает текущий статус Tesla PowerPack[https://www.tesla.com/powerpack]. 
+
+ИНТЕРНЕТ НЕ САМОЕ БЕЗОПАСНОЕ МЕСТО 
+
+На самом деле списки доступного просто безграничны. Можно и панели управления 
+ветряными турбинами найти и чьи-то медиа-центры на вьетнамском, торчащие в 
+интернет. Придерживайтесь сами нескольких базовых правил и все будет хорошо. 
+
+Если устройство может работать в оффлайне — не выставляйте его в Интернет 
+
+Если очень надо выставить устройство в Интернет, не надо пробрасывать к нему 
+доступ напрямую. Используйте VPN для подключения к своей сети 
+
+Если уж нужен публичный доступ — закрывайте панели управления паролями 
+
+Не забывайте своевременно обновлять устройства и закрывать уязвимости 
+
+Помните, что даже холодильник или телевизор может быть ключевым звеном в атаке 
+на вашу сеть и устройства 
+
+
+[http://ruvds.com/ru-rub?utm_source=habr&utm_medium=article&utm_campaign=mek&utm
+_content=shodan#order]
